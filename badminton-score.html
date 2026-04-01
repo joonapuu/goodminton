@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>Badminton Score</title>
+
+  <!-- MediaPipe Hands (for camera gesture detection) -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1632090164/camera_utils.js" crossorigin="anonymous"></script>
+
+  <style>
+    /* ── Reset ─────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 100dvw;
+      height: 100dvh;
+      overflow: hidden;
+      background: #000;
+      font-family: system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      touch-action: none;
+    }
+
+    /* ── Scoreboard ─────────────────────────── */
+    #scoreboard {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: 100%;
+    }
+
+    .team {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      cursor: pointer;
+      user-select: none;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    #t1 { background: #000; }
+    #t2 { background: #000; }
+
+    /* Flash overlay (sits on top of background) */
+    .flash-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    @keyframes flashAdd    { 0%{opacity:.45} 100%{opacity:0} }
+    @keyframes flashRemove { 0%{opacity:.55} 100%{opacity:0} }
+
+    #fl1.do-add    { background:#00e5ff; animation: flashAdd    .45s ease-out forwards; }
+    #fl2.do-add    { background:#e040fb; animation: flashAdd    .45s ease-out forwards; }
+    .flash-layer.do-remove { background:#cc0000; animation: flashRemove .45s ease-out forwards; }
+
+    /* Score number */
+    .score-num {
+      font-size: min(38vw, 66vh);
+      font-weight: 900;
+      font-family: 'Arial Black', Impact, 'Helvetica Neue', sans-serif;
+      line-height: 1;
+      letter-spacing: -0.03em;
+    }
+    #t1 .score-num { color: #00e5ff; }
+    #t2 .score-num { color: #e040fb; }
+
+    @keyframes bump {
+      0%   { transform: scale(1); }
+      45%  { transform: scale(1.13); }
+      100% { transform: scale(1); }
+    }
+    .score-num.bumping { animation: bump .28s cubic-bezier(.34,1.56,.64,1); }
+
+    .team-label {
+      font-size: clamp(13px, 2.2vw, 26px);
+      font-weight: 700;
+      letter-spacing: .28em;
+      text-transform: uppercase;
+      margin-top: 1.2vh;
+    }
+    #t1 .team-label { color: rgba(0, 229, 255, 0.40); }
+    #t2 .team-label { color: rgba(224,  64, 251, 0.40); }
+
+    /* Swipe hint */
+    .swipe-hint {
+      position: absolute;
+      bottom: 78px;
+      font-size: clamp(11px, 1.6vw, 16px);
+      text-align: center;
+      line-height: 1.8;
+      transition: opacity 1s;
+      pointer-events: none;
+    }
+    #t1 .swipe-hint { color: rgba(0, 229, 255, 0.25); }
+    #t2 .swipe-hint { color: rgba(224,  64, 251, 0.25); }
+
+    /* Centre divider */
+    #divider {
+      position: absolute;
+      left: 50%;
+      top: 0; bottom: 0;
+      width: 3px;
+      background: rgba(255,255,255,.12);
+      transform: translateX(-50%);
+      z-index: 5;
+      pointer-events: none;
+    }
+
+    /* ── Control bar ─────────────────────────── */
+    #controls {
+      position: fixed;
+      bottom: 18px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      gap: 10px;
+      z-index: 60;
+      background: rgba(0,0,0,.58);
+      padding: 8px 14px;
+      border-radius: 50px;
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+    }
+
+    .cbtn {
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,.30);
+      background: transparent;
+      color: #fff;
+      font-size: 19px;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background .15s, border-color .15s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .cbtn:hover  { background: rgba(255,255,255,.18); }
+    .cbtn:active { background: rgba(255,255,255,.30); }
+
+    .cbtn.on {
+      background: rgba(255,255,255,.22);
+      border-color: rgba(255,255,255,.80);
+    }
+
+    /* Pulsing red mic when voice is live */
+    .cbtn.listening {
+      background: rgba(255,50,50,.45);
+      border-color: #ff4040;
+      animation: micpulse 1.3s ease-in-out infinite;
+    }
+    @keyframes micpulse {
+      0%,100% { box-shadow: 0 0 0 0   rgba(255,64,64,.55); }
+      50%      { box-shadow: 0 0 0 11px rgba(255,64,64,0); }
+    }
+
+    /* ── Toast ───────────────────────────────── */
+    #toast {
+      position: fixed;
+      top: 22px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-6px);
+      background: rgba(0,0,0,.72);
+      color: #fff;
+      padding: 8px 22px;
+      border-radius: 100px;
+      font-size: clamp(13px, 1.9vw, 18px);
+      white-space: nowrap;
+      z-index: 90;
+      opacity: 0;
+      transition: opacity .22s, transform .22s;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+    }
+    #toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* ── Camera preview ──────────────────────── */
+    #cam-wrap {
+      position: fixed;
+      bottom: 76px;
+      right: 14px;
+      width: 164px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 2px solid rgba(255,255,255,.32);
+      display: none;
+      z-index: 55;
+      background: #000;
+    }
+    #cam-wrap.visible { display: block; }
+
+    #cam-canvas {
+      display: block;
+      width: 164px;
+      height: 123px;
+    }
+
+    #cam-status {
+      background: rgba(0,0,0,.72);
+      color: #fff;
+      font-size: 11px;
+      text-align: center;
+      padding: 3px 6px;
+      letter-spacing: .04em;
+    }
+
+    /* Left / right colour bands inside preview */
+    #cam-bands {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 5px;
+      display: flex;
+    }
+    #cam-bands .b1 { flex:1; background:#00e5ff; opacity:.8; }
+    #cam-bands .b2 { flex:1; background:#e040fb; opacity:.8; }
+
+    /* Dwell progress bar inside camera preview */
+    #dwell-bar-wrap {
+      position: absolute;
+      bottom: 24px;
+      left: 10px;
+      right: 10px;
+      height: 5px;
+      background: rgba(255,255,255,.2);
+      border-radius: 3px;
+      overflow: hidden;
+      display: none;
+    }
+    #dwell-bar {
+      height: 100%;
+      width: 0%;
+      background: #00ff88;
+      border-radius: 3px;
+      transition: width .05s linear;
+    }
+
+    /* ── Keyboard hint (top-right, subtle) ────── */
+    #kb-hint {
+      position: fixed;
+      top: 14px;
+      right: 14px;
+      color: rgba(255,255,255,.25);
+      font-size: 11px;
+      text-align: right;
+      line-height: 1.75;
+      z-index: 55;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══ Scoreboard ═══════════════════════════════════════ -->
+<div id="scoreboard">
+
+  <div class="team" id="t1">
+    <div class="flash-layer" id="fl1"></div>
+    <div class="score-num" id="s1">0</div>
+    <div class="team-label">Team 1</div>
+    <div class="swipe-hint" id="sh1">Tap to score<br>↓ Swipe / hold to undo</div>
+  </div>
+
+  <div id="divider"></div>
+
+  <div class="team" id="t2">
+    <div class="flash-layer" id="fl2"></div>
+    <div class="score-num" id="s2">0</div>
+    <div class="team-label">Team 2</div>
+    <div class="swipe-hint" id="sh2">Tap to score<br>↓ Swipe / hold to undo</div>
+  </div>
+
+</div>
+
+<!-- ═══ Toast ════════════════════════════════════════════ -->
+<div id="toast"></div>
+
+<!-- ═══ Keyboard hint ════════════════════════════════════ -->
+<div id="kb-hint">
+  1 / Q / ← = Team 1<br>
+  2 / W / → = Team 2<br>
+  A / S / ↑↓ = undo
+</div>
+
+<!-- ═══ Camera preview ═══════════════════════════════════ -->
+<div id="cam-wrap">
+  <canvas id="cam-canvas" width="328" height="246"></canvas>
+  <div id="cam-bands"><div class="b1"></div><div class="b2"></div></div>
+  <div id="dwell-bar-wrap"><div id="dwell-bar"></div></div>
+  <div id="cam-status">No hand detected</div>
+</div>
+
+<!-- ═══ Controls ═════════════════════════════════════════ -->
+<div id="controls">
+  <button class="cbtn" id="btn-cam"   title="Toggle camera gestures">📷</button>
+  <button class="cbtn" id="btn-voice" title="Toggle voice commands">🎤</button>
+  <button class="cbtn" id="btn-reset" title="Hold to reset scores">↺</button>
+</div>
+
+<!-- Hidden video for MediaPipe -->
+<video id="vid" playsinline hidden></video>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCRIPT
+════════════════════════════════════════════════════════ -->
+<script>'use strict';
+
+/* ── State ─────────────────────────────────────────────── */
+const scores      = [0, 0];
+let cameraOn      = false;
+let voiceOn       = false;
+let gestureCd     = false;   // gesture cooldown
+let voiceCd       = false;   // voice cooldown
+let recognition   = null;
+let mpHands       = null;
+let mpCamera      = null;
+
+// Dwell (gesture hold) state
+const DWELL_MS    = 1500;
+let dwellGesture  = null;    // 'up' | 'palm' | null
+let dwellTeam     = -1;
+let dwellStart    = 0;
+let dwellRafId    = null;
+
+/* ── DOM refs ───────────────────────────────────────────── */
+const scoreEls  = [document.getElementById('s1'),  document.getElementById('s2')];
+const teamEls   = [document.getElementById('t1'),  document.getElementById('t2')];
+const flashEls  = [document.getElementById('fl1'), document.getElementById('fl2')];
+const toastEl   = document.getElementById('toast');
+const camWrap   = document.getElementById('cam-wrap');
+const camCanvas = document.getElementById('cam-canvas');
+const camStatus = document.getElementById('cam-status');
+const dwellBar  = document.getElementById('dwell-bar');
+const dwellWrap = document.getElementById('dwell-bar-wrap');
+const vidEl     = document.getElementById('vid');
+const btnCam    = document.getElementById('btn-cam');
+const btnVoice  = document.getElementById('btn-voice');
+const btnReset  = document.getElementById('btn-reset');
+const camCtx    = camCanvas.getContext('2d');
+
+/* ── Fade out swipe hints ───────────────────────────────── */
+setTimeout(() => {
+  document.querySelectorAll('.swipe-hint').forEach(h => { h.style.opacity = '0'; });
+}, 5000);
+
+/* ════════════════════════════════════════════════════════
+   SCORE MANAGEMENT
+════════════════════════════════════════════════════════ */
+function changeScore(team, delta, source) {
+  const prev = scores[team];
+  scores[team] = Math.max(0, scores[team] + delta);
+  if (scores[team] === prev) return;
+
+  scoreEls[team].textContent = scores[team];
+
+  // Bump animation
+  scoreEls[team].classList.remove('bumping');
+  void scoreEls[team].offsetWidth;
+  scoreEls[team].classList.add('bumping');
+  scoreEls[team].addEventListener('animationend', () =>
+    scoreEls[team].classList.remove('bumping'), { once: true });
+
+  // Flash
+  const fl = flashEls[team];
+  fl.classList.remove('do-add', 'do-remove');
+  void fl.offsetWidth;
+  fl.classList.add(delta > 0 ? 'do-add' : 'do-remove');
+  fl.addEventListener('animationend', () => fl.classList.remove('do-add','do-remove'), { once: true });
+
+  const label = source ? ` (${source})` : '';
+  showToast(`Team ${team + 1}: ${delta > 0 ? '+1' : '−1'}${label}`);
+}
+
+function resetScores() {
+  scores[0] = scores[1] = 0;
+  scoreEls.forEach(el => {
+    el.textContent = '0';
+    el.classList.remove('bumping');
+  });
+  showToast('Scores reset ↺');
+}
+
+/* ════════════════════════════════════════════════════════
+   TOAST
+════════════════════════════════════════════════════════ */
+let toastTimer = null;
+function showToast(msg) {
+  toastEl.textContent = msg;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+}
+
+/* ════════════════════════════════════════════════════════
+   TOUCH / POINTER INPUT
+════════════════════════════════════════════════════════ */
+const pointers   = new Map();   // id → {x, y, time}
+let lpTimer      = null;        // long-press timer
+let lpTeam       = -1;
+
+const SWIPE_PX   = 52;
+const LP_MS      = 620;
+
+function teamFromX(x) { return x < window.innerWidth / 2 ? 0 : 1; }
+
+function onPtrDown(id, x, y, target) {
+  if (target && (target.closest('#controls') || target.closest('#cam-wrap'))) return;
+  pointers.set(id, { x, y, time: Date.now() });
+
+  clearTimeout(lpTimer);
+  lpTeam = teamFromX(x);
+  lpTimer = setTimeout(() => {
+    pointers.delete(id);
+    changeScore(lpTeam, -1, 'hold');
+    lpTimer = null;
+  }, LP_MS);
+}
+
+function onPtrUp(id, x, y) {
+  clearTimeout(lpTimer); lpTimer = null;
+  const d = pointers.get(id);
+  if (!d) return;
+  pointers.delete(id);
+
+  const dy = y - d.y;
+  const dx = x - d.x;
+  const dt = Date.now() - d.time;
+  const team = teamFromX(d.x);
+
+  if (dy > SWIPE_PX && Math.abs(dx) < SWIPE_PX * 1.2) {
+    changeScore(team, -1, 'swipe');
+  } else if (dt < LP_MS && Math.abs(dy) < 22 && Math.abs(dx) < 22) {
+    changeScore(team, 1);
+  }
+}
+
+// Pointer Events API (covers mouse + touch on modern browsers)
+if ('PointerEvent' in window) {
+  document.addEventListener('pointerdown', e =>
+    onPtrDown(e.pointerId, e.clientX, e.clientY, e.target));
+  document.addEventListener('pointerup', e =>
+    onPtrUp(e.pointerId, e.clientX, e.clientY));
+  document.addEventListener('pointercancel', e => {
+    clearTimeout(lpTimer); pointers.delete(e.pointerId);
+  });
+} else {
+  // Fallback for older Safari
+  document.addEventListener('touchstart', e => {
+    [...e.changedTouches].forEach(t =>
+      onPtrDown(t.identifier, t.clientX, t.clientY, e.target));
+  }, { passive: true });
+  document.addEventListener('touchend', e => {
+    [...e.changedTouches].forEach(t =>
+      onPtrUp(t.identifier, t.clientX, t.clientY));
+  }, { passive: true });
+  document.addEventListener('touchcancel', e => {
+    clearTimeout(lpTimer);
+    [...e.changedTouches].forEach(t => pointers.delete(t.identifier));
+  }, { passive: true });
+  document.addEventListener('mousedown', e =>
+    onPtrDown('mouse', e.clientX, e.clientY, e.target));
+  document.addEventListener('mouseup', e =>
+    onPtrUp('mouse', e.clientX, e.clientY));
+}
+
+/* ════════════════════════════════════════════════════════
+   KEYBOARD  (also used by Bluetooth remote mapped to keys)
+
+   Team 1 +1 : 1  Q  ArrowLeft
+   Team 2 +1 : 2  W  ArrowRight
+   Team 1 −1 : !  A  ArrowDown
+   Team 2 −1 : @  S  ArrowUp
+   Reset      : Shift+R
+════════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT') return;
+  switch (e.key) {
+    case '1': case 'q': case 'Q': case 'ArrowLeft':
+      e.preventDefault(); changeScore(0,  1, 'key'); break;
+    case '2': case 'w': case 'W': case 'ArrowRight':
+      e.preventDefault(); changeScore(1,  1, 'key'); break;
+    case '!': case 'a': case 'A': case 'ArrowDown':
+      e.preventDefault(); changeScore(0, -1, 'key'); break;
+    case '@': case 's': case 'S': case 'ArrowUp':
+      e.preventDefault(); changeScore(1, -1, 'key'); break;
+    case 'R':
+      if (e.shiftKey) { e.preventDefault(); resetScores(); } break;
+  }
+});
+
+/* ════════════════════════════════════════════════════════
+   VOICE COMMANDS  (Web Speech API)
+
+   Say: "one" / "two"  →  add point
+        "minus one" / "minus two"  →  subtract
+        "reset" / "new game"  →  reset scores
+        "cyan" / "magenta"  →  same as one/two
+════════════════════════════════════════════════════════ */
+function startVoice() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) {
+    showToast('⚠ Voice not supported — use Chrome or Edge');
+    return false;
+  }
+  recognition = new SR();
+  recognition.continuous      = true;
+  recognition.interimResults  = false;
+  recognition.lang            = 'en-US';
+
+  recognition.onresult = evt => {
+    if (voiceCd) return;
+    const text = evt.results[evt.results.length - 1][0].transcript
+                    .toLowerCase().trim();
+    handleVoice(text);
+  };
+  recognition.onerror = evt => {
+    if (evt.error !== 'no-speech' && evt.error !== 'aborted')
+      showToast(`🎤 Error: ${evt.error}`);
+  };
+  recognition.onend = () => {
+    if (voiceOn) try { recognition.start(); } catch {}
+  };
+
+  try { recognition.start(); return true; }
+  catch { showToast('Could not access microphone'); return false; }
+}
+
+function handleVoice(text) {
+  const minus = /minus|undo|remove|back|subtract|cancel/.test(text);
+  const isOne = /\bone\b|team\s*1|team\s*one|cyan|left/.test(text);
+  const isTwo = /\btwo\b|team\s*2|team\s*two|magenta|right/.test(text);
+  const isRst = /reset|restart|new\s*game|start\s*over|clear/.test(text);
+
+  if (isRst) { resetScores(); return; }
+
+  let team = -1;
+  if (isOne)      team = 0;
+  else if (isTwo) team = 1;
+  if (team < 0) return;
+
+  changeScore(team, minus ? -1 : 1, 'voice');
+  voiceCd = true;
+  setTimeout(() => voiceCd = false, 1400);
+}
+
+btnVoice.addEventListener('click', () => {
+  voiceOn = !voiceOn;
+  if (voiceOn) voiceOn = startVoice();
+  else { if (recognition) { recognition.stop(); recognition = null; } }
+  btnVoice.classList.toggle('on', voiceOn);
+  btnVoice.classList.toggle('listening', voiceOn);
+  if (voiceOn) showToast('🎤 Voice ON  —  say "one", "two", "minus one"…');
+  else         showToast('Voice OFF');
+});
+
+/* ════════════════════════════════════════════════════════
+   CAMERA GESTURE  (MediaPipe Hands)
+
+   Gesture → action:
+     Thumbs up   (hold 1.5 s)  →  +1 point
+     Open palm   (hold 1.5 s)  →  −1 point  (undo / fix score)
+
+   Team selection:
+     Left half of camera preview  →  Team 1 (cyan)
+     Right half of camera preview →  Team 2 (magenta)
+     (The preview is mirrored, matching natural mirror-like feel)
+════════════════════════════════════════════════════════ */
+function isUp(a, b) { return a.y < b.y; }  // a is above b in image coords
+
+function detectGesture(lm) {
+  // lm: array of 21 {x,y,z} normalised landmarks
+  const wrist = lm[0];
+
+  // Are the 4 main fingers curled? (tip y > pip y)
+  const idxCurled  = lm[8].y  > lm[6].y;
+  const midCurled  = lm[12].y > lm[10].y;
+  const ringCurled = lm[16].y > lm[14].y;
+  const pinkCurled = lm[20].y > lm[18].y;
+  const allCurled  = idxCurled && midCurled && ringCurled && pinkCurled;
+
+  // Are the 4 main fingers extended?
+  const idxExt  = lm[8].y  < lm[6].y;
+  const midExt  = lm[12].y < lm[10].y;
+  const ringExt = lm[16].y < lm[14].y;
+  const pinkExt = lm[20].y < lm[18].y;
+  const allExt  = idxExt && midExt && ringExt && pinkExt;
+
+  // Thumb tip well above wrist → thumbs up
+  if (allCurled && lm[4].y < wrist.y - 0.09) return 'up';
+
+  // All four fingers extended → open palm (undo)
+  if (allExt) return 'palm';
+
+  return null;
+}
+
+function clearDwell() {
+  dwellGesture = null;
+  dwellTeam    = -1;
+  dwellStart   = 0;
+  if (dwellRafId) { cancelAnimationFrame(dwellRafId); dwellRafId = null; }
+  dwellWrap.style.display = 'none';
+  dwellBar.style.width    = '0%';
+}
+
+function tickDwell() {
+  if (!dwellGesture) return;
+  const pct = Math.min((Date.now() - dwellStart) / DWELL_MS, 1);
+  dwellBar.style.width = (pct * 100) + '%';
+  dwellBar.style.background = pct < 0.5 ? '#00ff88' : '#ffee00';
+
+  if (pct >= 1) {
+    // Fire!
+    const delta = dwellGesture === 'up' ? 1 : -1;
+    changeScore(dwellTeam, delta, 'gesture');
+    gestureCd = true;
+    setTimeout(() => gestureCd = false, 2200);
+    clearDwell();
+    return;
+  }
+  dwellRafId = requestAnimationFrame(tickDwell);
+}
+
+function onHandResults(results) {
+  // Draw mirrored camera frame
+  camCtx.save();
+  camCtx.scale(-1, 1);
+  camCtx.translate(-camCanvas.width, 0);
+  camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
+  camCtx.restore();
+
+  if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
+    camStatus.textContent = 'No hand detected';
+    clearDwell();
+    return;
+  }
+
+  const lm      = results.multiHandLandmarks[0];
+  const gesture = detectGesture(lm);
+
+  // Team: use mirrored x (so visual left = Team 1, right = Team 2)
+  const mirX  = 1 - lm[0].x;
+  const team  = mirX < 0.5 ? 0 : 1;
+  const emoji = gesture === 'up' ? '👍' : gesture === 'palm' ? '🖐' : '—';
+  const tName = `Team ${team + 1}`;
+
+  // Draw hand skeleton (mirrored)
+  drawSkeleton(lm);
+
+  if (!gesture || gestureCd) {
+    camStatus.textContent = gestureCd
+      ? `✓ Scored! cooling down…`
+      : `${emoji}  Watching…`;
+    clearDwell();
+    return;
+  }
+
+  // Dwell logic
+  if (dwellGesture === gesture && dwellTeam === team) {
+    // Continuing the same gesture – tickDwell handles progress via rAF
+    const pct = Math.min((Date.now() - dwellStart) / DWELL_MS, 1);
+    camStatus.textContent = `${emoji} ${tName} · ${Math.round(pct*100)}%`;
+  } else {
+    // New gesture or team changed – restart dwell
+    clearDwell();
+    dwellGesture = gesture;
+    dwellTeam    = team;
+    dwellStart   = Date.now();
+    dwellWrap.style.display = 'block';
+    dwellRafId = requestAnimationFrame(tickDwell);
+    camStatus.textContent = `${emoji} ${tName} · hold…`;
+  }
+}
+
+function drawSkeleton(lm) {
+  const W = camCanvas.width, H = camCanvas.height;
+  const connections = [
+    [0,1],[1,2],[2,3],[3,4],
+    [0,5],[5,6],[6,7],[7,8],
+    [0,9],[9,10],[10,11],[11,12],
+    [0,13],[13,14],[14,15],[15,16],
+    [0,17],[17,18],[18,19],[19,20],
+    [5,9],[9,13],[13,17],
+  ];
+
+  // Mirror coordinates for display
+  const mx = p => (1 - p.x) * W;
+  const my = p => p.y * H;
+
+  camCtx.save();
+  camCtx.strokeStyle = 'rgba(0,255,136,.75)';
+  camCtx.lineWidth   = 1.8;
+  connections.forEach(([a, b]) => {
+    camCtx.beginPath();
+    camCtx.moveTo(mx(lm[a]), my(lm[a]));
+    camCtx.lineTo(mx(lm[b]), my(lm[b]));
+    camCtx.stroke();
+  });
+  camCtx.fillStyle = '#00ff88';
+  lm.forEach(p => {
+    camCtx.beginPath();
+    camCtx.arc(mx(p), my(p), 2.5, 0, Math.PI * 2);
+    camCtx.fill();
+  });
+  camCtx.restore();
+}
+
+async function startCamera() {
+  if (!window.Hands) {
+    showToast('⚠ MediaPipe not loaded — check internet');
+    return false;
+  }
+  try {
+    mpHands = new Hands({
+      locateFile: f =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
+    });
+    mpHands.setOptions({
+      maxNumHands:           1,
+      modelComplexity:       0,
+      minDetectionConfidence: 0.62,
+      minTrackingConfidence:  0.62,
+    });
+    mpHands.onResults(onHandResults);
+
+    mpCamera = new Camera(vidEl, {
+      onFrame: async () => { if (mpHands) await mpHands.send({ image: vidEl }); },
+      width:  328,
+      height: 246,
+    });
+    await mpCamera.start();
+    return true;
+  } catch (e) {
+    showToast('Camera: ' + (e.message || e));
+    return false;
+  }
+}
+
+function stopCamera() {
+  clearDwell();
+  if (mpCamera) { mpCamera.stop(); mpCamera = null; }
+  if (mpHands)  { mpHands.close(); mpHands  = null; }
+}
+
+btnCam.addEventListener('click', async () => {
+  cameraOn = !cameraOn;
+  if (cameraOn) {
+    showToast('Starting camera…');
+    cameraOn = await startCamera();
+    if (cameraOn) {
+      camWrap.classList.add('visible');
+      btnCam.classList.add('on');
+      showToast('📷 Gesture: 👍 hold = +1  ·  🖐 hold = −1  ·  position = team');
+    } else {
+      cameraOn = false;
+    }
+  } else {
+    stopCamera();
+    camWrap.classList.remove('visible');
+    btnCam.classList.remove('on');
+    showToast('Camera OFF');
+  }
+});
+
+/* ════════════════════════════════════════════════════════
+   RESET BUTTON  (hold 1.5 s to reset)
+════════════════════════════════════════════════════════ */
+let resetTimer   = null;
+let resetHolding = false;
+
+function startReset(e) {
+  e.preventDefault();
+  resetHolding = true;
+  btnReset.style.background    = 'rgba(255,160,0,.35)';
+  btnReset.style.borderColor   = '#ffa040';
+  resetTimer = setTimeout(() => {
+    if (!resetHolding) return;
+    resetScores();
+    btnReset.style.background  = '';
+    btnReset.style.borderColor = '';
+    resetHolding = false;
+  }, 1500);
+}
+
+function cancelReset() {
+  clearTimeout(resetTimer);
+  resetHolding               = false;
+  btnReset.style.background  = '';
+  btnReset.style.borderColor = '';
+}
+
+btnReset.addEventListener('mousedown',   startReset);
+btnReset.addEventListener('touchstart',  startReset, { passive: false });
+btnReset.addEventListener('mouseup',     cancelReset);
+btnReset.addEventListener('mouseleave',  cancelReset);
+btnReset.addEventListener('touchend',    cancelReset);
+btnReset.addEventListener('touchcancel', cancelReset);
+
+/* ════════════════════════════════════════════════════════
+   INIT
+════════════════════════════════════════════════════════ */
+showToast('👋 Tap left / right to score  ·  hold ↺ to reset');
+</script>
+</body>
+</html>
