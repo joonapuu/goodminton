@@ -11,7 +11,7 @@
 
   <!-- MediaPipe Hands (for camera gesture detection) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils@0.3.1632090164/camera_utils.js" crossorigin="anonymous"></script>
+  <!-- camera_utils removed: using getUserMedia directly for iOS compatibility -->
 
   <style>
     /* ── Reset ─────────────────────────────── */
@@ -315,7 +315,7 @@
 </div>
 
 <!-- Hidden video for MediaPipe -->
-<video id="vid" playsinline hidden></video>
+<video id="vid" playsinline muted hidden></video>
 
 <!-- ═══════════════════════════════════════════════════════
      SCRIPT
@@ -330,7 +330,7 @@ let gestureCd     = false;   // gesture cooldown
 let voiceCd       = false;   // voice cooldown
 let recognition   = null;
 let mpHands       = null;
-let mpCamera      = null;
+let mpRafId       = null;   // requestAnimationFrame id for camera loop
 
 // Dwell (gesture hold) state
 const DWELL_MS    = 1500;
@@ -522,7 +522,7 @@ function startVoice() {
   recognition = new SR();
   recognition.continuous      = true;
   recognition.interimResults  = false;
-  recognition.lang            = 'en-US';
+  recognition.lang            = 'fi-FI';
 
   recognition.onresult = evt => {
     if (voiceCd) return;
@@ -543,10 +543,16 @@ function startVoice() {
 }
 
 function handleVoice(text) {
-  const minus = /minus|undo|remove|back|subtract|cancel/.test(text);
-  const isOne = /\bone\b|team\s*1|team\s*one|cyan|left/.test(text);
-  const isTwo = /\btwo\b|team\s*2|team\s*two|magenta|right/.test(text);
-  const isRst = /reset|restart|new\s*game|start\s*over|clear/.test(text);
+  // Finnish commands:
+  //   "vasemmalle"         → Team 1 +1
+  //   "oikeelle"           → Team 2 +1
+  //   "miinus vasemmalle"  → Team 1 −1
+  //   "miinus oikeelle"    → Team 2 −1
+  //   "nollaa"             → reset
+  const minus = /miinus|peruuta/.test(text);
+  const isOne = /vasemmalle/.test(text);
+  const isTwo = /oikeelle/.test(text);
+  const isRst = /nollaa/.test(text);
 
   if (isRst) { resetScores(); return; }
 
@@ -566,7 +572,7 @@ btnVoice.addEventListener('click', () => {
   else { if (recognition) { recognition.stop(); recognition = null; } }
   btnVoice.classList.toggle('on', voiceOn);
   btnVoice.classList.toggle('listening', voiceOn);
-  if (voiceOn) showToast('🎤 Voice ON  —  say "one", "two", "minus one"…');
+  if (voiceOn) showToast('🎤 Ääni päällä  —  sano "vasemmalle" tai "oikeelle"');
   else         showToast('Voice OFF');
 });
 
@@ -728,24 +734,40 @@ async function startCamera() {
     return false;
   }
   try {
+    // Set up MediaPipe Hands
     mpHands = new Hands({
       locateFile: f =>
         `https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/${f}`
     });
     mpHands.setOptions({
-      maxNumHands:           1,
-      modelComplexity:       0,
+      maxNumHands:            1,
+      modelComplexity:        0,
       minDetectionConfidence: 0.62,
       minTrackingConfidence:  0.62,
     });
     mpHands.onResults(onHandResults);
 
-    mpCamera = new Camera(vidEl, {
-      onFrame: async () => { if (mpHands) await mpHands.send({ image: vidEl }); },
-      width:  328,
-      height: 246,
+    // getUserMedia works on iOS Safari; no camera_utils needed
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 328 }, height: { ideal: 246 } },
+      audio: false,
     });
-    await mpCamera.start();
+    vidEl.srcObject = stream;
+    await new Promise(resolve => {
+      vidEl.onloadedmetadata = resolve;
+      setTimeout(resolve, 3000); // safety fallback
+    });
+    await vidEl.play();
+
+    // Frame loop — awaits each send so we never queue up multiple frames
+    async function frameLoop() {
+      if (!cameraOn) return;
+      if (vidEl.readyState >= 2) {
+        try { await mpHands.send({ image: vidEl }); } catch {}
+      }
+      if (cameraOn) mpRafId = requestAnimationFrame(frameLoop);
+    }
+    mpRafId = requestAnimationFrame(frameLoop);
     return true;
   } catch (e) {
     showToast('Camera: ' + (e.message || e));
@@ -755,8 +777,12 @@ async function startCamera() {
 
 function stopCamera() {
   clearDwell();
-  if (mpCamera) { mpCamera.stop(); mpCamera = null; }
-  if (mpHands)  { mpHands.close(); mpHands  = null; }
+  if (mpRafId) { cancelAnimationFrame(mpRafId); mpRafId = null; }
+  if (vidEl.srcObject) {
+    vidEl.srcObject.getTracks().forEach(t => t.stop());
+    vidEl.srcObject = null;
+  }
+  if (mpHands) { mpHands.close(); mpHands = null; }
 }
 
 btnCam.addEventListener('click', async () => {
