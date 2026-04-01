@@ -192,57 +192,19 @@
       transform: translateX(-50%) translateY(0);
     }
 
-    /* ── Camera preview ──────────────────────── */
-    #cam-wrap {
-      position: fixed;
-      bottom: 76px;
-      right: 14px;
-      width: 164px;
-      border-radius: 12px;
-      overflow: hidden;
-      border: 2px solid rgba(255,255,255,.32);
-      display: none;
-      z-index: 55;
-      background: #000;
-    }
-    #cam-wrap.visible { display: block; }
-
-    #cam-canvas {
-      display: block;
-      width: 164px;
-      height: 123px;
-    }
-
-    #cam-status {
-      background: rgba(0,0,0,.72);
-      color: #fff;
-      font-size: 11px;
-      text-align: center;
-      padding: 3px 6px;
-      letter-spacing: .04em;
-    }
-
-    /* Left / right colour bands inside preview */
-    #cam-bands {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 5px;
-      display: flex;
-    }
-    #cam-bands .b1 { flex:1; background:#00e5ff; opacity:.8; }
-    #cam-bands .b2 { flex:1; background:#e040fb; opacity:.8; }
-
-    /* Dwell progress bar inside camera preview */
+    /* ── Gesture dwell progress bar ─────────────────── */
     #dwell-bar-wrap {
-      position: absolute;
-      bottom: 24px;
-      left: 10px;
-      right: 10px;
-      height: 5px;
-      background: rgba(255,255,255,.2);
+      position: fixed;
+      bottom: 76px;          /* sits just above the control bar */
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(260px, 40vw);
+      height: 6px;
+      background: rgba(255,255,255,.15);
       border-radius: 3px;
       overflow: hidden;
       display: none;
+      z-index: 60;
     }
     #dwell-bar {
       height: 100%;
@@ -299,13 +261,8 @@
   A / S / ↑↓ = undo
 </div>
 
-<!-- ═══ Camera preview ═══════════════════════════════════ -->
-<div id="cam-wrap">
-  <canvas id="cam-canvas" width="328" height="246"></canvas>
-  <div id="cam-bands"><div class="b1"></div><div class="b2"></div></div>
-  <div id="dwell-bar-wrap"><div id="dwell-bar"></div></div>
-  <div id="cam-status">No hand detected</div>
-</div>
+<!-- ═══ Gesture dwell bar ════════════════════════════════ -->
+<div id="dwell-bar-wrap"><div id="dwell-bar"></div></div>
 
 <!-- ═══ Controls ═════════════════════════════════════════ -->
 <div id="controls">
@@ -344,16 +301,12 @@ const scoreEls  = [document.getElementById('s1'),  document.getElementById('s2')
 const teamEls   = [document.getElementById('t1'),  document.getElementById('t2')];
 const flashEls  = [document.getElementById('fl1'), document.getElementById('fl2')];
 const toastEl   = document.getElementById('toast');
-const camWrap   = document.getElementById('cam-wrap');
-const camCanvas = document.getElementById('cam-canvas');
-const camStatus = document.getElementById('cam-status');
 const dwellBar  = document.getElementById('dwell-bar');
 const dwellWrap = document.getElementById('dwell-bar-wrap');
 const vidEl     = document.getElementById('vid');
 const btnCam    = document.getElementById('btn-cam');
 const btnVoice  = document.getElementById('btn-voice');
 const btnReset  = document.getElementById('btn-reset');
-const camCtx    = camCanvas.getContext('2d');
 
 /* ── Fade out swipe hints ───────────────────────────────── */
 setTimeout(() => {
@@ -588,31 +541,19 @@ btnVoice.addEventListener('click', () => {
      Right half of camera preview →  Team 2 (magenta)
      (The preview is mirrored, matching natural mirror-like feel)
 ════════════════════════════════════════════════════════ */
-function isUp(a, b) { return a.y < b.y; }  // a is above b in image coords
-
 function detectGesture(lm) {
-  // lm: array of 21 {x,y,z} normalised landmarks
-  const wrist = lm[0];
+  // Detect open palm: at least 3 of the 4 main fingers clearly extended.
+  // Using tip-above-MCP (knuckle) rather than tip-above-PIP for a more
+  // forgiving check that works at more hand angles.
+  const idxExt  = lm[8].y  < lm[5].y;   // index  tip above index  MCP
+  const midExt  = lm[12].y < lm[9].y;   // middle tip above middle MCP
+  const ringExt = lm[16].y < lm[13].y;  // ring   tip above ring   MCP
+  const pinkExt = lm[20].y < lm[17].y;  // pinky  tip above pinky  MCP
 
-  // Are the 4 main fingers curled? (tip y > pip y)
-  const idxCurled  = lm[8].y  > lm[6].y;
-  const midCurled  = lm[12].y > lm[10].y;
-  const ringCurled = lm[16].y > lm[14].y;
-  const pinkCurled = lm[20].y > lm[18].y;
-  const allCurled  = idxCurled && midCurled && ringCurled && pinkCurled;
+  const extCount = [idxExt, midExt, ringExt, pinkExt].filter(Boolean).length;
 
-  // Are the 4 main fingers extended?
-  const idxExt  = lm[8].y  < lm[6].y;
-  const midExt  = lm[12].y < lm[10].y;
-  const ringExt = lm[16].y < lm[14].y;
-  const pinkExt = lm[20].y < lm[18].y;
-  const allExt  = idxExt && midExt && ringExt && pinkExt;
-
-  // Thumb tip well above wrist → thumbs up
-  if (allCurled && lm[4].y < wrist.y - 0.09) return 'up';
-
-  // All four fingers extended → open palm (undo)
-  if (allExt) return 'palm';
+  // 3 or more fingers up = open palm / raised hand
+  if (extCount >= 3) return 'palm';
 
   return null;
 }
@@ -634,8 +575,7 @@ function tickDwell() {
 
   if (pct >= 1) {
     // Fire!
-    const delta = dwellGesture === 'up' ? 1 : -1;
-    changeScore(dwellTeam, delta, 'gesture');
+    changeScore(dwellTeam, 1, 'gesture');
     gestureCd = true;
     setTimeout(() => gestureCd = false, 2200);
     clearDwell();
@@ -645,15 +585,7 @@ function tickDwell() {
 }
 
 function onHandResults(results) {
-  // Draw mirrored camera frame
-  camCtx.save();
-  camCtx.scale(-1, 1);
-  camCtx.translate(-camCanvas.width, 0);
-  camCtx.drawImage(results.image, 0, 0, camCanvas.width, camCanvas.height);
-  camCtx.restore();
-
   if (!results.multiHandLandmarks || !results.multiHandLandmarks.length) {
-    camStatus.textContent = 'No hand detected';
     clearDwell();
     return;
   }
@@ -661,71 +593,26 @@ function onHandResults(results) {
   const lm      = results.multiHandLandmarks[0];
   const gesture = detectGesture(lm);
 
-  // Team: use mirrored x (so visual left = Team 1, right = Team 2)
-  const mirX  = 1 - lm[0].x;
-  const team  = mirX < 0.5 ? 0 : 1;
-  const emoji = gesture === 'up' ? '👍' : gesture === 'palm' ? '🖐' : '—';
-  const tName = `Team ${team + 1}`;
-
-  // Draw hand skeleton (mirrored)
-  drawSkeleton(lm);
+  // Team: use mirrored x (so camera-left = Team 1, camera-right = Team 2)
+  const mirX = 1 - lm[0].x;
+  const team = mirX < 0.5 ? 0 : 1;
 
   if (!gesture || gestureCd) {
-    camStatus.textContent = gestureCd
-      ? `✓ Scored! cooling down…`
-      : `${emoji}  Watching…`;
     clearDwell();
     return;
   }
 
-  // Dwell logic
+  // Dwell logic — start or continue hold
   if (dwellGesture === gesture && dwellTeam === team) {
-    // Continuing the same gesture – tickDwell handles progress via rAF
-    const pct = Math.min((Date.now() - dwellStart) / DWELL_MS, 1);
-    camStatus.textContent = `${emoji} ${tName} · ${Math.round(pct*100)}%`;
+    // Same gesture continuing; tickDwell handles the bar via rAF
   } else {
-    // New gesture or team changed – restart dwell
     clearDwell();
     dwellGesture = gesture;
     dwellTeam    = team;
     dwellStart   = Date.now();
     dwellWrap.style.display = 'block';
     dwellRafId = requestAnimationFrame(tickDwell);
-    camStatus.textContent = `${emoji} ${tName} · hold…`;
   }
-}
-
-function drawSkeleton(lm) {
-  const W = camCanvas.width, H = camCanvas.height;
-  const connections = [
-    [0,1],[1,2],[2,3],[3,4],
-    [0,5],[5,6],[6,7],[7,8],
-    [0,9],[9,10],[10,11],[11,12],
-    [0,13],[13,14],[14,15],[15,16],
-    [0,17],[17,18],[18,19],[19,20],
-    [5,9],[9,13],[13,17],
-  ];
-
-  // Mirror coordinates for display
-  const mx = p => (1 - p.x) * W;
-  const my = p => p.y * H;
-
-  camCtx.save();
-  camCtx.strokeStyle = 'rgba(0,255,136,.75)';
-  camCtx.lineWidth   = 1.8;
-  connections.forEach(([a, b]) => {
-    camCtx.beginPath();
-    camCtx.moveTo(mx(lm[a]), my(lm[a]));
-    camCtx.lineTo(mx(lm[b]), my(lm[b]));
-    camCtx.stroke();
-  });
-  camCtx.fillStyle = '#00ff88';
-  lm.forEach(p => {
-    camCtx.beginPath();
-    camCtx.arc(mx(p), my(p), 2.5, 0, Math.PI * 2);
-    camCtx.fill();
-  });
-  camCtx.restore();
 }
 
 async function startCamera() {
@@ -791,15 +678,13 @@ btnCam.addEventListener('click', async () => {
     showToast('Starting camera…');
     cameraOn = await startCamera();
     if (cameraOn) {
-      camWrap.classList.add('visible');
       btnCam.classList.add('on');
-      showToast('📷 Gesture: 👍 hold = +1  ·  🖐 hold = −1  ·  position = team');
+      showToast('📷 Gesture: 🖐 raise hand & hold = +1  ·  position = team');
     } else {
       cameraOn = false;
     }
   } else {
     stopCamera();
-    camWrap.classList.remove('visible');
     btnCam.classList.remove('on');
     showToast('Camera OFF');
   }
