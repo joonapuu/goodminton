@@ -67,7 +67,7 @@
 
     /* Score number */
     .score-num {
-      font-size: min(38vw, 66vh);
+      font-size: min(40vw, 76vh);
       font-weight: 900;
       font-family: 'Arial Black', Impact, 'Helvetica Neue', sans-serif;
       line-height: 1;
@@ -83,15 +83,6 @@
     }
     .score-num.bumping { animation: bump .28s cubic-bezier(.34,1.56,.64,1); }
 
-    .team-label {
-      font-size: clamp(13px, 2.2vw, 26px);
-      font-weight: 700;
-      letter-spacing: .28em;
-      text-transform: uppercase;
-      margin-top: 1.2vh;
-    }
-    #t1 .team-label { color: rgba(0, 229, 255, 0.40); }
-    #t2 .team-label { color: rgba(224,  64, 251, 0.40); }
 
     /* Swipe hint */
     .swipe-hint {
@@ -195,22 +186,16 @@
     /* ── Gesture dwell progress bar ─────────────────── */
     #dwell-bar-wrap {
       position: fixed;
-      bottom: 76px;          /* sits just above the control bar */
-      left: 50%;
-      transform: translateX(-50%);
-      width: min(260px, 40vw);
-      height: 6px;
-      background: rgba(255,255,255,.15);
-      border-radius: 3px;
-      overflow: hidden;
+      bottom: 0;
+      height: 40px;
+      width: 50%;            /* half the screen — side set via JS */
+      background: rgba(255,255,255,.08);
       display: none;
       z-index: 60;
     }
     #dwell-bar {
       height: 100%;
       width: 0%;
-      background: #00ff88;
-      border-radius: 3px;
       transition: width .05s linear;
     }
 
@@ -236,7 +221,6 @@
   <div class="team" id="t1">
     <div class="flash-layer" id="fl1"></div>
     <div class="score-num" id="s1">0</div>
-    <div class="team-label">Team 1</div>
     <div class="swipe-hint" id="sh1">Tap to score<br>↓ Swipe / hold to undo</div>
   </div>
 
@@ -245,7 +229,6 @@
   <div class="team" id="t2">
     <div class="flash-layer" id="fl2"></div>
     <div class="score-num" id="s2">0</div>
-    <div class="team-label">Team 2</div>
     <div class="swipe-hint" id="sh2">Tap to score<br>↓ Swipe / hold to undo</div>
   </div>
 
@@ -358,7 +341,7 @@ function showToast(msg) {
   toastEl.textContent = msg;
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 2400);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), 10000);
 }
 
 /* ════════════════════════════════════════════════════════
@@ -571,7 +554,6 @@ function tickDwell() {
   if (!dwellGesture) return;
   const pct = Math.min((Date.now() - dwellStart) / DWELL_MS, 1);
   dwellBar.style.width = (pct * 100) + '%';
-  dwellBar.style.background = pct < 0.5 ? '#00ff88' : '#ffee00';
 
   if (pct >= 1) {
     // Fire!
@@ -610,6 +592,18 @@ function onHandResults(results) {
     dwellGesture = gesture;
     dwellTeam    = team;
     dwellStart   = Date.now();
+    // Position bar on the scoring side, coloured to match the team
+    if (team === 0) {
+      dwellWrap.style.left  = '0';
+      dwellWrap.style.right = 'auto';
+      dwellBar.style.background  = '#00e5ff';
+      dwellBar.style.boxShadow   = '0 0 22px 6px rgba(0,229,255,.8)';
+    } else {
+      dwellWrap.style.left  = 'auto';
+      dwellWrap.style.right = '0';
+      dwellBar.style.background  = '#e040fb';
+      dwellBar.style.boxShadow   = '0 0 22px 6px rgba(224,64,251,.8)';
+    }
     dwellWrap.style.display = 'block';
     dwellRafId = requestAnimationFrame(tickDwell);
   }
