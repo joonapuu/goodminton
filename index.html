@@ -5,9 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Goodminton">
   <meta name="theme-color" content="#000000">
   <link rel="manifest" href="manifest.json">
-  <title>Badminton Score</title>
+  <title>Goodminton</title>
 
   <!-- MediaPipe Hands (for camera gesture detection) -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1646424915/hands.js" crossorigin="anonymous"></script>
@@ -467,11 +468,17 @@ function startVoice() {
     handleVoice(text);
   };
   recognition.onerror = evt => {
-    if (evt.error !== 'no-speech' && evt.error !== 'aborted')
+    // iOS Safari fires 'not-allowed' briefly during restart — ignore it
+    const silent = ['no-speech', 'aborted', 'not-allowed'];
+    if (!silent.includes(evt.error))
       showToast(`🎤 Error: ${evt.error}`);
   };
   recognition.onend = () => {
-    if (voiceOn) try { recognition.start(); } catch {}
+    // iOS Safari stops after every utterance; a short delay prevents a
+    // "not-allowed" race condition before restarting
+    if (voiceOn) setTimeout(() => {
+      try { recognition.start(); } catch {}
+    }, 150);
   };
 
   try { recognition.start(); return true; }

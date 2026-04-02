@@ -1,6 +1,6 @@
 {
-  "name": "Badminton Score",
-  "short_name": "Badminton",
+  "name": "Goodminton",
+  "short_name": "Goodminton",
   "description": "Courtside badminton scoreboard with voice, gesture, and touch controls",
   "start_url": "./index.html",
   "display": "fullscreen",
