@@ -74,7 +74,7 @@
     @keyframes flashRemove { 0%{opacity:.55} 100%{opacity:0} }
 
     .flash-layer.do-add { background:#EBEAE2; animation: flashAdd    .45s ease-out forwards; }
-    .flash-layer.do-remove { background:#cc0000; animation: flashRemove .45s ease-out forwards; }
+    .flash-layer.do-remove { background:#7a2800; animation: flashRemove .45s ease-out forwards; }
 
     /* Score number */
     .score-num {
@@ -474,7 +474,7 @@ const LP_MS      = 620;
 function teamFromX(x) { return x < window.innerWidth / 2 ? 0 : 1; }
 
 function onPtrDown(id, x, y, target) {
-  if (target && (target.closest('#controls') || target.closest('#cam-wrap'))) return;
+  if (target && (target.closest('#controls') || target.closest('#cam-wrap') || target.closest('#info-overlay'))) return;
   pointers.set(id, { x, y, time: Date.now() });
 
   clearTimeout(lpTimer);
@@ -569,7 +569,7 @@ document.addEventListener('keydown', e => {
 function startVoice() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) {
-    showToast('⚠ Voice not supported — use Chrome or Edge');
+    showToast('⚠ Äänikomennot eivät ole tuettuja — käytä Chromea tai Edgeä');
     return false;
   }
   recognition = new SR();
@@ -587,7 +587,7 @@ function startVoice() {
     // iOS Safari fires 'not-allowed' briefly during restart — ignore it
     const silent = ['no-speech', 'aborted', 'not-allowed'];
     if (!silent.includes(evt.error))
-      showToast(`🎤 Error: ${evt.error}`);
+      showToast(`🎤 Virhe: ${evt.error}`);
   };
   recognition.onend = () => {
     // iOS Safari stops after every utterance; a short delay prevents a
@@ -598,7 +598,7 @@ function startVoice() {
   };
 
   try { recognition.start(); return true; }
-  catch { showToast('Could not access microphone'); return false; }
+  catch { showToast('Mikrofoniin ei saada yhteyttä'); return false; }
 }
 
 function handleVoice(text) {
@@ -627,7 +627,7 @@ btnVoice.addEventListener('click', () => {
   btnVoice.classList.toggle('on', voiceOn);
   btnVoice.classList.toggle('listening', voiceOn);
   if (voiceOn) showToast('🎤 Ääni päällä  —  sano "vasemmalle" tai "oikeelle"');
-  else         showToast('Voice OFF');
+  else         showToast('Ääni pois');
 });
 
 /* ════════════════════════════════════════════════════════
@@ -725,7 +725,7 @@ function onHandResults(results) {
 
 async function startCamera() {
   if (!window.Hands) {
-    showToast('⚠ MediaPipe not loaded — check internet');
+    showToast('⚠ MediaPipe ei latautunut — tarkista internet-yhteys');
     return false;
   }
   try {
@@ -765,7 +765,7 @@ async function startCamera() {
     mpRafId = requestAnimationFrame(frameLoop);
     return true;
   } catch (e) {
-    showToast('Camera: ' + (e.message || e));
+    showToast('Kamera: ' + (e.message || e));
     return false;
   }
 }
@@ -783,18 +783,18 @@ function stopCamera() {
 btnCam.addEventListener('click', async () => {
   cameraOn = !cameraOn;
   if (cameraOn) {
-    showToast('Starting camera…');
+    showToast('Käynnistetään kamera…');
     cameraOn = await startCamera();
     if (cameraOn) {
       btnCam.classList.add('on');
-      showToast('📷 Gesture: ✌ peace sign & hold = +1  ·  left side = Team 1, right = Team 2');
+
     } else {
       cameraOn = false;
     }
   } else {
     stopCamera();
     btnCam.classList.remove('on');
-    showToast('Camera OFF');
+    showToast('Kamera pois');
   }
 });
 
