@@ -73,8 +73,7 @@
     @keyframes flashAdd    { 0%{opacity:.45} 100%{opacity:0} }
     @keyframes flashRemove { 0%{opacity:.55} 100%{opacity:0} }
 
-    #fl1.do-add    { background:#00e5ff; animation: flashAdd    .45s ease-out forwards; }
-    #fl2.do-add    { background:#e040fb; animation: flashAdd    .45s ease-out forwards; }
+    .flash-layer.do-add { background:#EBEAE2; animation: flashAdd    .45s ease-out forwards; }
     .flash-layer.do-remove { background:#cc0000; animation: flashRemove .45s ease-out forwards; }
 
     /* Score number */
@@ -658,14 +657,13 @@ function onHandResults(results) {
     if (team === 0) {
       dwellWrap.style.left  = '0';
       dwellWrap.style.right = 'auto';
-      dwellBar.style.background  = '#00e5ff';
-      dwellBar.style.boxShadow   = '0 0 22px 6px rgba(0,229,255,.8)';
     } else {
       dwellWrap.style.left  = 'auto';
       dwellWrap.style.right = '0';
-      dwellBar.style.background  = '#e040fb';
-      dwellBar.style.boxShadow   = '0 0 22px 6px rgba(224,64,251,.8)';
     }
+    // Use the same color as the score number (orange if last scorer, white otherwise)
+    dwellBar.style.background = scoreEls[team].style.color || '#EBEAE2';
+    dwellBar.style.boxShadow  = 'none';
     dwellWrap.style.display = 'block';
     dwellRafId = requestAnimationFrame(tickDwell);
   }
