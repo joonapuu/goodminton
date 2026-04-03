@@ -384,7 +384,7 @@ let mpRafId       = null;   // requestAnimationFrame id for camera loop
 const pulseTimers = [null, null];
 
 // Dwell (gesture hold) state
-const DWELL_MS    = 1500;
+const DWELL_MS    = 1000;
 let dwellGesture  = null;    // 'peace' | null
 let dwellTeam     = -1;
 let dwellStart    = 0;
@@ -634,8 +634,8 @@ btnVoice.addEventListener('click', () => {
    CAMERA GESTURE  (MediaPipe Hands)
 
    Gesture → action:
-     Thumbs up   (hold 1.5 s)  →  +1 point
-     Open palm   (hold 1.5 s)  →  −1 point  (undo / fix score)
+     Thumbs up   (hold 1 s)  →  +1 point
+     Open palm   (hold 1 s)  →  −1 point  (undo / fix score)
 
    Team selection:
      Left half of camera preview  →  Team 1 (cyan)
