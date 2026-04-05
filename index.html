@@ -315,12 +315,6 @@
       <path d="M16.75,15.637L16.75,16C16.75,18.07 15.07,19.75 13,19.75L6,19.75C3.93,19.75 2.25,18.07 2.25,16L2.25,9C2.25,6.93 3.93,5.25 6,5.25L13,5.25C15.07,5.25 16.75,6.93 16.75,9L16.75,9.794L19.131,7.217C20.212,6.047 22.167,6.812 22.167,8.405L22.167,16.595C22.167,18.113 20.368,18.911 19.242,17.893L16.75,15.637ZM15.25,16L15.25,9C15.25,7.758 14.242,6.75 13,6.75L6,6.75C4.758,6.75 3.75,7.758 3.75,9L3.75,16C3.75,17.242 4.758,18.25 6,18.25L13,18.25C14.242,18.25 15.25,17.242 15.25,16ZM16.75,13.06C16.75,13.413 16.899,13.75 17.161,13.986L20.249,16.781C20.41,16.926 20.667,16.812 20.667,16.595L20.667,8.405C20.667,8.177 20.387,8.068 20.233,8.235L17.082,11.645C16.868,11.876 16.75,12.179 16.75,12.494L16.75,13.06Z" style="fill:currentColor;"/>
     </svg>
   </button>
-  <!-- Microphone (Icon_mic.svg) -->
-  <button class="cbtn" id="btn-voice" title="Toggle voice commands">
-    <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
-      <path d="M10.754,18.926C7.1,18.553 4.25,15.466 4.25,11.714C4.25,11.3 4.586,10.964 5,10.964C5.414,10.964 5.75,11.3 5.75,11.714C5.75,14.89 8.324,17.464 11.5,17.464C14.676,17.464 17.25,14.89 17.25,11.714C17.25,11.3 17.586,10.964 18,10.964C18.414,10.964 18.75,11.3 18.75,11.714C18.75,15.466 15.9,18.553 12.246,18.926C12.249,18.951 12.25,18.975 12.25,19L12.25,21C12.25,21.414 11.914,21.75 11.5,21.75C11.086,21.75 10.75,21.414 10.75,21L10.75,19C10.75,18.975 10.751,18.951 10.754,18.926ZM15.75,7.5L15.75,11.5C15.75,13.846 13.846,15.75 11.5,15.75C9.154,15.75 7.25,13.846 7.25,11.5L7.25,7.5C7.25,5.154 9.154,3.25 11.5,3.25C13.846,3.25 15.75,5.154 15.75,7.5ZM14.25,7.5C14.25,5.982 13.018,4.75 11.5,4.75C9.982,4.75 8.75,5.982 8.75,7.5L8.75,11.5C8.75,13.018 9.982,14.25 11.5,14.25C13.018,14.25 14.25,13.018 14.25,11.5L14.25,7.5Z" style="fill:currentColor;"/>
-    </svg>
-  </button>
   <!-- Reset (Icon_reset.svg) -->
   <button class="cbtn" id="btn-reset" title="Reset scores">
     <svg width="15" height="15" viewBox="0 0 15 15" xmlns="http://www.w3.org/2000/svg" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linejoin:round;stroke-miterlimit:2;">
@@ -352,13 +346,9 @@
     </section>
     <section>
       <h3>Käsimerkit</h3>
-      <p>Aktivoi kamera-painikkeella. Lisää piste pitämällä ✌ sormimerkkiä kohti kameraa 1,5 sekuntia. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
+      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä 👍 peukalo ylös kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
     </section>
-    <section>
-      <h3>Äänikomennot</h3>
-      <p>Aktivoi mikrofoni-painikkeella. Komento <em>"vasemmalle"</em> lisää pisteen vasemmalle. Komento <em>"oikeelle"</em> lisää pisteen oikealle. Voit poistaa pisteitä sanomalla <em>"miinus"</em> ennen komentoa.</p>
-    </section>
-    <footer>Leijoona / Joona Puurunen</footer>
+    <footer>www.leijoona.com</footer>
   </div>
 </div>
 
@@ -373,10 +363,7 @@
 /* ── State ─────────────────────────────────────────────── */
 const scores      = [0, 0];
 let cameraOn      = false;
-let voiceOn       = false;
 let gestureCd     = false;   // gesture cooldown
-let voiceCd       = false;   // voice cooldown
-let recognition   = null;
 let mpHands       = null;
 let mpRafId       = null;   // requestAnimationFrame id for camera loop
 
@@ -384,8 +371,8 @@ let mpRafId       = null;   // requestAnimationFrame id for camera loop
 const pulseTimers = [null, null];
 
 // Dwell (gesture hold) state
-const DWELL_MS    = 1000;
-let dwellGesture  = null;    // 'peace' | null
+const DWELL_MS    = 250;
+let dwellGesture  = null;    // 'thumbsup' | null
 let dwellTeam     = -1;
 let dwellStart    = 0;
 let dwellRafId    = null;
@@ -399,7 +386,6 @@ const dwellBar  = document.getElementById('dwell-bar');
 const dwellWrap = document.getElementById('dwell-bar-wrap');
 const vidEl     = document.getElementById('vid');
 const btnCam    = document.getElementById('btn-cam');
-const btnVoice  = document.getElementById('btn-voice');
 const btnReset  = document.getElementById('btn-reset');
 
 
@@ -558,77 +544,7 @@ document.addEventListener('keydown', e => {
   }
 });
 
-/* ════════════════════════════════════════════════════════
-   VOICE COMMANDS  (Web Speech API)
 
-   Say: "one" / "two"  →  add point
-        "minus one" / "minus two"  →  subtract
-        "reset" / "new game"  →  reset scores
-        "cyan" / "magenta"  →  same as one/two
-════════════════════════════════════════════════════════ */
-function startVoice() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) {
-    showToast('⚠ Äänikomennot eivät ole tuettuja — käytä Chromea tai Edgeä');
-    return false;
-  }
-  recognition = new SR();
-  recognition.continuous      = true;
-  recognition.interimResults  = false;
-  recognition.lang            = 'fi-FI';
-
-  recognition.onresult = evt => {
-    if (voiceCd) return;
-    const text = evt.results[evt.results.length - 1][0].transcript
-                    .toLowerCase().trim();
-    handleVoice(text);
-  };
-  recognition.onerror = evt => {
-    // iOS Safari fires 'not-allowed' briefly during restart — ignore it
-    const silent = ['no-speech', 'aborted', 'not-allowed'];
-    if (!silent.includes(evt.error))
-      showToast(`🎤 Virhe: ${evt.error}`);
-  };
-  recognition.onend = () => {
-    // iOS Safari stops after every utterance; a short delay prevents a
-    // "not-allowed" race condition before restarting
-    if (voiceOn) setTimeout(() => {
-      try { recognition.start(); } catch {}
-    }, 150);
-  };
-
-  try { recognition.start(); return true; }
-  catch { showToast('Mikrofoniin ei saada yhteyttä'); return false; }
-}
-
-function handleVoice(text) {
-  // Finnish commands:
-  //   "vasemmalle"         → Team 1 +1
-  //   "oikeelle"           → Team 2 +1
-  //   "miinus vasemmalle"  → Team 1 −1
-  //   "miinus oikeelle"    → Team 2 −1
-  const minus = /miinus|peruuta/.test(text);
-  const isOne = /vasemmalle/.test(text);
-  const isTwo = /oikeelle/.test(text);
-  let team = -1;
-  if (isOne)      team = 0;
-  else if (isTwo) team = 1;
-  if (team < 0) return;
-
-  changeScore(team, minus ? -1 : 1, 'voice');
-  voiceCd = true;
-  setTimeout(() => voiceCd = false, 1400);
-}
-
-btnVoice.addEventListener('click', () => {
-  voiceOn = !voiceOn;
-  if (voiceOn) voiceOn = startVoice();
-  else { if (recognition) { recognition.stop(); recognition = null; } }
-  btnVoice.classList.toggle('on', voiceOn);
-  btnVoice.classList.toggle('listening', voiceOn);
-  if (voiceOn) showToast('🎤 Ääni päällä  —  sano "vasemmalle" tai "oikeelle"');
-  else         showToast('Ääni pois');
-});
 
 /* ════════════════════════════════════════════════════════
    CAMERA GESTURE  (MediaPipe Hands)
@@ -643,15 +559,14 @@ btnVoice.addEventListener('click', () => {
      (The preview is mirrored, matching natural mirror-like feel)
 ════════════════════════════════════════════════════════ */
 function detectGesture(lm) {
-  // Detect peace sign (✌): index + middle extended, ring + pinky curled.
-  // Checked against MCP (knuckle) so it works at any orientation —
-  // fingers pointing up near the head, downward near the thigh, sideways, etc.
-  const idxExt  = lm[8].y  < lm[5].y;   // index  tip above index  MCP
-  const midExt  = lm[12].y < lm[9].y;   // middle tip above middle MCP
-  const ringCurl = lm[16].y > lm[13].y;  // ring  tip below ring   MCP
-  const pinkCurl = lm[20].y > lm[17].y;  // pinky tip below pinky  MCP
+  // Detect thumbs up: thumb tip extended above thumb MCP, all fingers curled.
+  const thumbExt = lm[4].y  < lm[2].y;   // thumb tip above thumb MCP
+  const idxCurl  = lm[8].y  > lm[5].y;   // index  tip below index  MCP
+  const midCurl  = lm[12].y > lm[9].y;   // middle tip below middle MCP
+  const ringCurl = lm[16].y > lm[13].y;  // ring   tip below ring   MCP
+  const pinkCurl = lm[20].y > lm[17].y;  // pinky  tip below pinky  MCP
 
-  if (idxExt && midExt && ringCurl && pinkCurl) return 'peace';
+  if (thumbExt && idxCurl && midCurl && ringCurl && pinkCurl) return 'thumbsup';
 
   return null;
 }
