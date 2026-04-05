@@ -346,7 +346,7 @@
     </section>
     <section>
       <h3>Käsimerkit</h3>
-      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä 👍 peukalo ylös kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
+      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä ✋ avoin käsi kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
     </section>
     <footer>www.leijoona.com</footer>
   </div>
@@ -372,7 +372,7 @@ const pulseTimers = [null, null];
 
 // Dwell (gesture hold) state
 const DWELL_MS    = 250;
-let dwellGesture  = null;    // 'thumbsup' | null
+let dwellGesture  = null;    // 'openpalm' | null
 let dwellTeam     = -1;
 let dwellStart    = 0;
 let dwellRafId    = null;
@@ -558,19 +558,20 @@ document.addEventListener('keydown', e => {
      Right half of camera preview →  Team 2 (magenta)
      (The preview is mirrored, matching natural mirror-like feel)
 ════════════════════════════════════════════════════════ */
-function detectGesture(lm) {
-  // Detect thumbs up:
-  //   - Thumb tip (4) clearly above the index MCP knuckle (5) — a stable
-  //     mid-palm anchor, so the check works at distance and any hand height.
-  //   - All four fingers curled: tip below PIP (middle joint), which fires
-  //     even on a loose fist and is far more reliable than checking vs MCP.
-  const thumbUp  = lm[4].y  < lm[5].y;    // thumb tip above index knuckle
-  const idxCurl  = lm[8].y  > lm[6].y;    // index  tip below index  PIP
-  const midCurl  = lm[12].y > lm[10].y;   // middle tip below middle PIP
-  const ringCurl = lm[16].y > lm[14].y;   // ring   tip below ring   PIP
-  const pinkCurl = lm[20].y > lm[18].y;   // pinky  tip below pinky  PIP
+function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
-  if (thumbUp && idxCurl && midCurl && ringCurl && pinkCurl) return 'thumbsup';
+function detectGesture(lm) {
+  // Open palm: each fingertip must be farther from the wrist than its MCP
+  // knuckle, scaled by a ratio. Uses distances instead of y-coordinates so
+  // it works at any hand orientation and is robust at 2–3 m range.
+  const w = lm[0];
+  const extended = (tip, mcp) => dist(tip, w) > dist(mcp, w) * 1.4;
+
+  if (extended(lm[8],  lm[5])  &&   // index
+      extended(lm[12], lm[9])  &&   // middle
+      extended(lm[16], lm[13]) &&   // ring
+      extended(lm[20], lm[17]))     // pinky
+    return 'openpalm';
 
   return null;
 }
@@ -663,7 +664,7 @@ async function startCamera() {
 
     // getUserMedia works on iOS Safari; no camera_utils needed
     const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } },
+      video: { facingMode: 'user', width: { ideal: 320 }, height: { ideal: 240 } },
       audio: false,
     });
     vidEl.srcObject = stream;
