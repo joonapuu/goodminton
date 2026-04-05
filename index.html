@@ -559,14 +559,18 @@ document.addEventListener('keydown', e => {
      (The preview is mirrored, matching natural mirror-like feel)
 ════════════════════════════════════════════════════════ */
 function detectGesture(lm) {
-  // Detect thumbs up: thumb tip extended above thumb MCP, all fingers curled.
-  const thumbExt = lm[4].y  < lm[2].y;   // thumb tip above thumb MCP
-  const idxCurl  = lm[8].y  > lm[5].y;   // index  tip below index  MCP
-  const midCurl  = lm[12].y > lm[9].y;   // middle tip below middle MCP
-  const ringCurl = lm[16].y > lm[13].y;  // ring   tip below ring   MCP
-  const pinkCurl = lm[20].y > lm[17].y;  // pinky  tip below pinky  MCP
+  // Detect thumbs up:
+  //   - Thumb tip (4) clearly above the index MCP knuckle (5) — a stable
+  //     mid-palm anchor, so the check works at distance and any hand height.
+  //   - All four fingers curled: tip below PIP (middle joint), which fires
+  //     even on a loose fist and is far more reliable than checking vs MCP.
+  const thumbUp  = lm[4].y  < lm[5].y;    // thumb tip above index knuckle
+  const idxCurl  = lm[8].y  > lm[6].y;    // index  tip below index  PIP
+  const midCurl  = lm[12].y > lm[10].y;   // middle tip below middle PIP
+  const ringCurl = lm[16].y > lm[14].y;   // ring   tip below ring   PIP
+  const pinkCurl = lm[20].y > lm[18].y;   // pinky  tip below pinky  PIP
 
-  if (thumbExt && idxCurl && midCurl && ringCurl && pinkCurl) return 'thumbsup';
+  if (thumbUp && idxCurl && midCurl && ringCurl && pinkCurl) return 'thumbsup';
 
   return null;
 }
