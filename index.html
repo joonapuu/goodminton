@@ -346,7 +346,7 @@
     </section>
     <section>
       <h3>Käsimerkit</h3>
-      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä ✋ avoin käsi kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
+      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä ✌ sormimerkki kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
     </section>
     <footer>www.leijoona.com</footer>
   </div>
@@ -372,7 +372,7 @@ const pulseTimers = [null, null];
 
 // Dwell (gesture hold) state
 const DWELL_MS    = 250;
-let dwellGesture  = null;    // 'openpalm' | null
+let dwellGesture  = null;    // 'peace' | null
 let dwellTeam     = -1;
 let dwellStart    = 0;
 let dwellRafId    = null;
@@ -561,17 +561,17 @@ document.addEventListener('keydown', e => {
 function dist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
 
 function detectGesture(lm) {
-  // Open palm: each fingertip must be farther from the wrist than its MCP
-  // knuckle, scaled by a ratio. Uses distances instead of y-coordinates so
-  // it works at any hand orientation and is robust at 2–3 m range.
+  // Peace sign (✌): index + middle extended, ring + pinky curled.
+  // Uses wrist-distance ratios so it works at any orientation and distance.
   const w = lm[0];
   const extended = (tip, mcp) => dist(tip, w) > dist(mcp, w) * 1.4;
+  const curled   = (tip, mcp) => dist(tip, w) < dist(mcp, w) * 1.3;
 
-  if (extended(lm[8],  lm[5])  &&   // index
-      extended(lm[12], lm[9])  &&   // middle
-      extended(lm[16], lm[13]) &&   // ring
-      extended(lm[20], lm[17]))     // pinky
-    return 'openpalm';
+  if (extended(lm[8],  lm[5])  &&   // index extended
+      extended(lm[12], lm[9])  &&   // middle extended
+      curled(lm[16],   lm[13]) &&   // ring curled
+      curled(lm[20],   lm[17]))     // pinky curled
+    return 'peace';
 
   return null;
 }
