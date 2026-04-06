@@ -341,12 +341,12 @@
   <div id="info-popup">
     <button id="info-close">✕</button>
     <section>
-      <h3>Pisteen lisääminen</h3>
-      <p>Lisää piste napauttamalla näytön oikeaa tai vasenta puolta. Poista piste pyyhkäisemällä alas tai painamalla pitkään.</p>
+      <h3>Adding a Point</h3>
+      <p>Tap the left or right side of the screen to add a point. Remove a point by swiping down or long pressing.</p>
     </section>
     <section>
-      <h3>Käsimerkit</h3>
-      <p>Aktivoi kamera-painikkeella. Lisää piste näyttämällä ✌ sormimerkki kameralle. Kameran vasen puoli lisää pisteen vasemmalle puolelle, oikea puoli oikealle puolelle.</p>
+      <h3>Hand Gestures</h3>
+      <p>Activate with the camera button. Show the ✌ sign to the camera to add a point. The left side of the camera adds a point to the left, the right side to the right.</p>
     </section>
     <footer>www.leijoona.com</footer>
   </div>
@@ -645,7 +645,7 @@ function onHandResults(results) {
 
 async function startCamera() {
   if (!window.Hands) {
-    showToast('⚠ MediaPipe ei latautunut — tarkista internet-yhteys');
+    showToast('⚠ MediaPipe failed to load. Check your internet connection.');
     return false;
   }
   try {
@@ -703,7 +703,7 @@ function stopCamera() {
 btnCam.addEventListener('click', async () => {
   cameraOn = !cameraOn;
   if (cameraOn) {
-    showToast('Käynnistetään kamera…');
+    showToast('Starting camera…');
     cameraOn = await startCamera();
     if (cameraOn) {
       btnCam.classList.add('on');
